@@ -1,4 +1,4 @@
-from connection import connect_to_database
+from connection_fixed import connect_to_database
 from add import add_word
 
 def main():
