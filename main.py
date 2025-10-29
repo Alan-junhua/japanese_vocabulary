@@ -5,6 +5,7 @@ def main():
     """日语词典主函数"""
 
     print("欢迎使用日语单词查询程序！")
+    print("正在连接到数据库...")
     connection = connect_to_database()
 
     if not connection:
