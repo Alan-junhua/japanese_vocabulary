@@ -27,6 +27,7 @@ def main():
         if cont != 'y':
             break
     if connection:
+
         connection.close()
         print("数据库连接已关闭。")
 
