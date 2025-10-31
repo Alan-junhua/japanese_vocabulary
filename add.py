@@ -1,5 +1,7 @@
 import mysql.connector
 from mysql.connector import Error
+import os
+from dotenv import load_dotenv
 
 
 def add_word(connection):  #添加新的单词
@@ -32,26 +34,29 @@ def add_word(connection):  #添加新的单词
 
 
 #测试
-if __name__ == "__main__":
-    from connection import connect_to_database
-
-    connection = connect_to_database()
-    if not connection:
-        print("数据库连接失败，请检查配置。")
-        exit(1)
-
+def get_db_connection():
+    load_dotenv()  # 加载环境变量
     try:
-        while True:
-            add_word(connection)
-            cont = input("是否继续添加单词？(y/n)：").strip().lower()
-            if cont != 'y':
-                break
+        connection = mysql.connector.connect(
+            host='127.0.0.1',          # 必须使用IP，不能用localhost
+            port=3306,                 # 明确指定端口
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME")
+        )
+        if connection.is_connected():
+            print("成功连接到数据库")
+            return connection
+    except Error as e:
+        print(f"数据库连接错误：{e}")
+    return None
 
-    except Exception as e:
-        print(f"发生错误：{e}")
+def main():
+    connection = get_db_connection()
+    if connection:
+        add_word(connection)
+        connection.close()
+        print("数据库连接已关闭")
 
-    finally:
-        if connection:
-            connection.close()
-            print("数据库连接已关闭。")
-
+if __name__ == "__main__":
+    main()

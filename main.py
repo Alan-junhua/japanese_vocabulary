@@ -1,5 +1,6 @@
 from connection_fixed import connect_to_database
 from add import add_word
+from find_word import find_word
 
 def main():
     """日语词典主函数"""
@@ -16,10 +17,13 @@ def main():
         print("成功连接到日语词典数据库！")
         print("\n请选择你要进行的操作：")
         print("1. 增加单词。")
+        print("2. 查找单词。")
 
         choice = input("输入选项（1-5): ")
         if choice == '1':
             add_word(connection)
+        elif choice == '2':
+            find_word(connection)
         else:
             print("无效的选项，请重新选择。")
             continue    
