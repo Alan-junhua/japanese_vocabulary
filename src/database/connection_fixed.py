@@ -9,7 +9,7 @@ def connect_to_database():
     try:
         # 明确使用TCP/IP连接，避免命名管道
         connection = mysql.connector.connect(
-            host='127.0.0.1',          # 必须使用IP，不能用localhost
+            host='127.0.0.1',          
             port=3306,                 # 明确指定端口
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASSWORD'),

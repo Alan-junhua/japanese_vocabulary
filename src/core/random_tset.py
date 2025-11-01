@@ -30,6 +30,7 @@ def test(connection):
             continue  # 重新开始循环
 
 #整本书随机测试
+
 def all_tests(connection):
     print("\n" + "=" * 50)
     print("开始全部课文的随机测试（共15题，输入'exit'可随时退出）")
