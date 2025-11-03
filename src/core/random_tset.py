@@ -3,280 +3,194 @@ from mysql.connector import Error
 import os
 from dotenv import load_dotenv
 import random
-import re
+# 导入kana_test的核心函数（确保两文件在同一目录）
+from kana_test import generate_question_options
 
-# 随机测试功能
-def test(connection):
+
+# ------------------- 工具函数：输入解析与范围处理 -------------------
+def parse_lesson_input():
+    """解析用户输入的测试范围（单个课/范围/all），返回范围类型和正则模式"""
     while True:
-        try:
-            print("随机测试模式：")
-            print("请选择你要测试的课文范围（1—48）：")
-            lesson_range = input("输入课文范围（例如1-5，或all表示全部课文）：").strip()
-
-            if lesson_range.lower() == "all":
-                all_tests(connection)
-            else:
-                try:
-                    start, end = map(int, lesson_range.split('-'))
-                    if start < 1 or end > 48 or start > end:
-                        print("无效的课文范围，请输入1到48之间的范围，例如1-5。")
-                        continue
-                    range_tests(connection, start, end)
-                except ValueError:
-                    print("输入格式错误，请输入正确的课文范围，例如1-5，或all表示全部课文。")
-                    continue
-        except Exception as e:
-            print(f"发生错误：{e}")
-            continue  # 重新开始循环
-
-#整本书随机测试
-
-def all_tests(connection):
-    print("\n" + "=" * 50)
-    print("开始全部课文的随机测试（共15题，输入'exit'可随时退出）")
-    print("规则：随机出题，可能需要翻译日文单词，也可能需要翻译中文意思")
-    print("=" * 50)
-
-    cursor = None
-    try:
-        cursor = connection.cursor()
-        counter = 0
-
-        while counter < 15:
-            # 获取随机单词
-            cursor.execute("SELECT word, meaning FROM vocabulary ORDER BY RAND() LIMIT 1")
-            result = cursor.fetchone()
-
-            if not result:
-                print("未找到单词，测试结束。")
-                break  # 退出测试循环
-
-            target_word, target_meaning = result
-            
-            # 随机选择测试类型
-            test_type = random.choice(["word_to_meaning", "meaning_to_word"])
-
-            # 看单词选中文意思
-            if test_type == "word_to_meaning":
-                # 随机生成三个干扰选项
-                cursor.execute("SELECT meaning FROM vocabulary WHERE meaning != %s ORDER BY RAND() LIMIT 3", (target_meaning,))
-                distractors = [row[0] for row in cursor.fetchall()]
-                # 确保有足够的干扰项
-                if len(distractors) < 3:
-                    print("警告：干扰项不足，可能影响测试效果")
-                    while len(distractors) < 3:
-                        distractors.append("(无选项)")
-                
-                options = [target_meaning] + distractors
-                random.shuffle(options)   # 打乱选项顺序
-
-                # 显示题目与选项
-                print(f"\n第{counter + 1}题; 单词：{target_word}的正确中文意思是？")
-                for idx, option in enumerate(options, 1):
-                    print(f"{idx}. {option}")
-                    
-                while True:
-                    user_input = input("请输入你的选择（1-4）:").strip()
-                    if user_input.lower() == 'exit':
-                        print("测试结束")
-                        return
-                    if user_input not in ['1', '2', '3', '4']:
-                        print("无效的选择，请输入1—4之间的数字。")
-                        continue
-                    break
-
-                # 判断答案是否正确
-                selected_meaning = options[int(user_input) - 1]
-                if selected_meaning == target_meaning:
-                    print("回答正确！")
-                else:
-                    print(f"回答错误！正确的答案是{target_meaning}")
-                counter += 1
-            
-            # 看中文选单词
-            elif test_type == "meaning_to_word":
-                # 随机生成三个干扰选项
-                cursor.execute("SELECT word FROM vocabulary WHERE word != %s ORDER BY RAND() LIMIT 3", (target_word,))
-                distractors = [row[0] for row in cursor.fetchall()]
-                # 确保有足够的干扰项
-                if len(distractors) < 3:
-                    print("警告：干扰项不足，可能影响测试效果")
-                    while len(distractors) < 3:
-                        distractors.append("(无选项)")
-                
-                options = [target_word] + distractors
-                random.shuffle(options)
-
-                # 显示题目与选项
-                print(f"\n第{counter + 1}题; 中文意思：{target_meaning}对应的正确单词是？")
-                for idx, option in enumerate(options, 1):
-                    print(f"{idx}. {option}")
-         
-                while True:
-                    user_input = input("请输入你的选择（1-4）:").strip()
-                    if user_input.lower() == 'exit':
-                        print("测试结束")
-                        return
-                    if user_input not in ['1', '2', '3', '4']:
-                        print("无效的选择，请输入1—4之间的数字。")
-                        continue
-                    break
-
-                # 判断答案是否正确
-                selected_word = options[int(user_input) - 1]
-                if selected_word == target_word:
-                    print("回答正确！")
-                else:
-                    print(f"回答错误！正确的答案是{target_word}")
-                counter += 1
- 
-    except Error as e:
-        print(f"数据库查询错误：{e}")
-    finally:
-        if cursor:
-            cursor.close()
-
-# 指定范围随机测试
-def range_tests(connection, start, end):
-    print("\n" + "=" * 50)
-    print(f"开始第{start}到{end}课的随机测试（共15题，输入'exit'可随时退出）")
-    print("规则：随机出题，可能需要翻译日文单词，也可能需要翻译中文意思")
-    print("=" * 50)
-
-    cursor = None
-    try:
-        cursor = connection.cursor()
-        counter = 0
-
-        # 生成课程范围匹配的模式，例如1-3会生成"第1课|第2课|第3课"
-        lesson_pattern = "|".join([f"第{i}课" for i in range(start, end + 1)])
+        user_input = input("请选择测试范围（输入1-48的单个课数/范围，或all表示全部）：").strip().lower()
         
-        while counter < 15:
-            # 从指定课程范围查询单词（使用正则匹配）
-            cursor.execute(
-                "SELECT word, meaning FROM vocabulary WHERE lesson REGEXP %s ORDER BY RAND() LIMIT 1",
-                (lesson_pattern,)
-            )
-            result = cursor.fetchone()
-
-            if not result:
-                print("该范围内未找到单词，测试结束。")
-                break  # 退出测试循环
-
-            target_word, target_meaning = result
-            
-            # 随机选择测试类型
-            test_type = random.choice(["word_to_meaning", "meaning_to_word"])
-
-            # 看单词选中文意思
-            if test_type == "word_to_meaning":
-                # 从指定范围生成干扰选项
-                cursor.execute(
-                    "SELECT meaning FROM vocabulary WHERE lesson REGEXP %s AND meaning != %s ORDER BY RAND() LIMIT 3",
-                    (lesson_pattern, target_meaning)
-                )
-                distractors = [row[0] for row in cursor.fetchall()]
-                if len(distractors) < 3:
-                    print("警告：干扰项不足，可能影响测试效果")
-                    while len(distractors) < 3:
-                        distractors.append("(无选项)")
-                
-                options = [target_meaning] + distractors
-                random.shuffle(options)
-
-                print(f"\n第{counter + 1}题; 单词：{target_word}的正确中文意思是？")
-                for idx, option in enumerate(options, 1):
-                    print(f"{idx}. {option}")
-                    
-                while True:
-                    user_input = input("请输入你的选择（1-4）:").strip()
-                    if user_input.lower() == 'exit':
-                        print("测试结束")
-                        return
-                    if user_input not in ['1', '2', '3', '4']:
-                        print("无效的选择，请输入1—4之间的数字。")
-                        continue
-                    break
-
-                selected_meaning = options[int(user_input) - 1]
-                if selected_meaning == target_meaning:
-                    print("回答正确！")
+        # 1. 全部课文
+        if user_input == "all":
+            print(f"✅ 已选择：全部1-48课\n")
+            return r"第[1-9]\d*课"  # 匹配所有“第X课”的正则
+        
+        # 2. 单个课数（如：3 → 第3课）
+        if user_input.isdigit():
+            lesson_num = int(user_input)
+            if 1 <= lesson_num <= 48:
+                pattern = f"第{lesson_num}课"
+                print(f"✅ 已选择：第{lesson_num}课\n")
+                return pattern
+            else:
+                print("❌ 课数超出范围！请输入1-48之间的数字。")
+                continue
+        
+        # 3. 课数范围（如：1-5 → 第1-5课）
+        if "-" in user_input:
+            parts = user_input.split("-")
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                start, end = int(parts[0]), int(parts[1])
+                if 1 <= start <= end <= 48:
+                    pattern = "|".join([f"第{i}课" for i in range(start, end + 1)])
+                    print(f"✅ 已选择：第{start}-{end}课\n")
+                    return pattern
                 else:
-                    print(f"回答错误！正确的答案是{target_meaning}")
-                counter += 1
-            
-            # 看中文选单词
-            elif test_type == "meaning_to_word":
-                # 从指定范围生成干扰选项
-                cursor.execute(
-                    "SELECT word FROM vocabulary WHERE lesson REGEXP %s AND word != %s ORDER BY RAND() LIMIT 3",
-                    (lesson_pattern, target_word)
-                )
-                distractors = [row[0] for row in cursor.fetchall()]
-                if len(distractors) < 3:
-                    print("警告：干扰项不足，可能影响测试效果")
-                    while len(distractors) < 3:
-                        distractors.append("(无选项)")
-                
-                options = [target_word] + distractors
-                random.shuffle(options)
+                    print("❌ 范围无效！请确保开始≤结束，且在1-48之间（如1-5）。")
+                    continue
+        
+        # 4. 输入格式错误
+        print("❌ 输入格式错误！请输入：\n- 单个课数（如3）\n- 课数范围（如1-5）\n- all（全部课文）")
 
-                print(f"\n第{counter + 1}题; 中文意思：{target_meaning}对应的正确单词是？")
-                for idx, option in enumerate(options, 1):
-                    print(f"{idx}. {option}")
-         
-                while True:
-                    user_input = input("请输入你的选择（1-4）:").strip()
-                    if user_input.lower() == 'exit':
-                        print("测试结束")
-                        return
-                    if user_input not in ['1', '2', '3', '4']:
-                        print("无效的选择，请输入1—4之间的数字。")
-                        continue
-                    break
 
-                selected_word = options[int(user_input) - 1]
-                if selected_word == target_word:
-                    print("回答正确！")
-                else:
-                    print(f"回答错误！正确的答案是{target_word}")
-                counter += 1
-
+def fetch_random_word_with_kana(connection, lesson_pattern):
+    """从指定范围随机获取1个带平假名的单词（返回：单词、正确平假名；无数据则返回None）"""
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True)
+        # 只查询有平假名的单词（避免无数据可用）
+        sql = """
+            SELECT word, hiragana 
+            FROM vocabulary 
+            WHERE lesson REGEXP %s 
+              AND hiragana IS NOT NULL 
+              AND hiragana != '' 
+            ORDER BY RAND() 
+            LIMIT 1
+        """
+        cursor.execute(sql, (lesson_pattern,))
+        result = cursor.fetchone()
+        if not result:
+            return None  # 无符合条件的单词
+        return result["word"], result["hiragana"]  # （日文单词，正确平假名）
     except Error as e:
-        print(f"数据库查询错误：{e}")
+        print(f"❌ 单词查询错误：{e}")
+        return None
     finally:
         if cursor:
             cursor.close()
 
 
+# ------------------- 核心测试函数：仅平假名识别 -------------------
+def run_kana_only_quiz(connection, lesson_pattern, total_questions=15):
+    """执行纯平假名识别测试：显示单词→选择正确平假名"""
+    print("=" * 50)
+    print("🎯 平假名识别测试（仅1种题型）")
+    print(f"📝 规则：根据显示的日文单词，选择对应的正确平假名")
+    print(f"📊 共{total_questions}题，输入'exit'可随时退出")
+    print("=" * 50 + "\n")
+    
+    correct_count = 0  # 正确题数
+    completed_count = 0  # 已完成题数
+
+    for q_num in range(1, total_questions + 1):
+        # 1. 获取带平假名的随机单词（无数据则终止）
+        word_data = fetch_random_word_with_kana(connection, lesson_pattern)
+        if not word_data:
+            print(f"\n⚠️  该范围暂无带平假名的单词，测试提前结束")
+            break
+        target_word, correct_kana = word_data  # 目标单词 + 正确平假名
+        completed_count += 1
+
+        # 2. 调用kana_test生成：正确平假名 + 3个错误平假名（混排选项）
+        kana_options_result = generate_question_options(
+            connection=connection,        # 复用数据库连接
+            original_hiragana=correct_kana,  # 基于正确平假名生成错误选项
+            wrong_option_count=3          # 固定3个错误选项
+        )
+
+        # 3. 处理选项生成失败的情况（跳过本题）
+        if not kana_options_result["success"]:
+            print(f"第{q_num}题 ⚠️  选项生成失败：{kana_options_result['reason']}，跳过本题\n")
+            completed_count -= 1  # 跳过不计入已完成
+            continue
+
+        # 4. 提取混排后的选项（正确+错误）
+        shuffled_options = kana_options_result["shuffled_options"]
+
+        # 5. 展示题目与选项
+        print(f"第{q_num}题：日文单词「{target_word}」对应的正确平假名是？")
+        for idx, option in enumerate(shuffled_options, 1):
+            print(f"  {idx}. {option}")
+
+        # 6. 获取用户输入（支持exit退出，验证输入有效性）
+        while True:
+            user_input = input("请输入选项编号（1-4）：").strip().lower()
+            # 中途退出测试
+            if user_input == "exit":
+                print(f"\n📊 测试主动终止！已完成{completed_count}题，正确率：{correct_count}/{completed_count}" if completed_count > 0 else "📊 测试未开始")
+                return
+            # 验证输入是1-4的数字
+            if user_input in ["1", "2", "3", "4"]:
+                user_choice = shuffled_options[int(user_input) - 1]
+                break
+            print("❌ 无效输入！请输入1-4之间的数字。")
+
+        # 7. 判断答案并反馈
+        if user_choice == correct_kana:
+            print("✅ 回答正确！\n")
+            correct_count += 1
+        else:
+            print(f"❌ 回答错误！正确答案是：{correct_kana}\n")
+
+    # 8. 测试完成（答完所有题或无数据）
+    if completed_count == 0:
+        print("\n📊 未完成任何题目")
+    else:
+        accuracy = (correct_count / completed_count) * 100 if completed_count > 0 else 0
+        print(f"🎉 测试结束！共完成{completed_count}题（计划{total_questions}题）")
+        print(f"📊 正确率：{correct_count}/{completed_count}（{accuracy:.1f}%）")
+
+
+# ------------------- 数据库连接与入口函数 -------------------
 def get_db_connection():
-    load_dotenv()  # 加载环境变量
+    """获取数据库连接（简化日志，仅关键提示）"""
+    load_dotenv()
     try:
         connection = mysql.connector.connect(
-            host='127.0.0.1',          # 必须使用IP，不能用localhost
-            port=3306,                 # 明确指定端口
+            host='127.0.0.1',
+            port=3306,
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME")
         )
         if connection.is_connected():
-            print("成功连接到数据库")
+            print("✅ 数据库连接成功\n")
             return connection
     except Error as e:
-        print(f"数据库连接错误：{e}")
+        print(f"❌ 数据库连接失败：{e}（请检查.env配置）")
     return None
 
+
 def main():
-    connection = get_db_connection()
-    if connection:
-        try:
-            test(connection)
-        finally:
-            # 确保数据库连接关闭
-            if connection.is_connected():
-                connection.close()
-                print("数据库连接已关闭")
+    # 1. 建立数据库连接（连接失败则退出）
+    db_connection = get_db_connection()
+    if not db_connection:
+        return
+
+    try:
+        # 2. 显示欢迎信息 + 解析测试范围
+        print("=" * 60)
+        print("🎯 日文单词平假名识别测试系统（纯平假名模式）")
+        print("=" * 60)
+        lesson_regex_pattern = parse_lesson_input()
+
+        # 3. 执行纯平假名测试（可修改total_questions调整题数）
+        run_kana_only_quiz(
+            connection=db_connection,
+            lesson_pattern=lesson_regex_pattern,
+            total_questions=15  # 默认15题，可按需修改
+        )
+
+    finally:
+        # 4. 确保数据库连接关闭（无论测试是否正常结束）
+        if db_connection.is_connected():
+            db_connection.close()
+            print("\n🔚 数据库连接已关闭")
+
 
 if __name__ == "__main__":
-    main()
     main()
