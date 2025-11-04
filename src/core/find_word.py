@@ -1,7 +1,6 @@
-import mysql.connector
-from mysql.connector import Error
+import sqlite3
+from sqlite3 import Error
 import os
-from dotenv import load_dotenv
 
 
 def find_word(connection):  # 查找单词
@@ -24,7 +23,8 @@ def find_word(connection):  # 查找单词
                 # 数据库操作
                 try:
                     cursor = connection.cursor()
-                    cursor.execute("SELECT word, hiragana, meaning, lesson FROM vocabulary WHERE word LIKE %s", (f'%{word}%',))
+                    # 使用SQLite占位符 ? 替代MySQL的 %s
+                    cursor.execute("SELECT word, hiragana, meaning, lesson FROM vocabulary WHERE word LIKE ?", (f'%{word}%',))
                     results = cursor.fetchall()
 
                     print("查询结果：")
@@ -52,7 +52,8 @@ def find_word(connection):  # 查找单词
                 # 数据库操作
                 try:
                     cursor = connection.cursor()
-                    cursor.execute("SELECT word, hiragana, meaning, lesson lesson FROM vocabulary WHERE meaning LIKE %s", (f'%{meaning}%',))
+                    # 使用SQLite占位符 ? 替代MySQL的 %s，并修复重复的lesson字段
+                    cursor.execute("SELECT word, hiragana, meaning, lesson FROM vocabulary WHERE meaning LIKE ?", (f'%{meaning}%',))
                     results = cursor.fetchall()
 
                     print("查询结果：")
@@ -68,26 +69,27 @@ def find_word(connection):  # 查找单词
                     print(f"数据库查询错误：{e}")
                     if 'cursor' in locals():  # 确保游标关闭
                         cursor.close()
+                        
+            # 询问是否继续查询
+            continue_search = input("是否继续查询？(y/n): ").strip().lower()
+            if continue_search != 'y':
+                break
 
         except Exception as e:  # 捕获其他未预料的异常
             print(f"发生错误：{e}")
 
+
 def get_db_connection():
-    load_dotenv()  # 加载环境变量
+    """获取SQLite数据库连接"""
     try:
-        connection = mysql.connector.connect(
-            host='127.0.0.1',          # 必须使用IP，不能用localhost
-            port=3306,                 # 明确指定端口
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME")
-        )
-        if connection.is_connected():
-            print("成功连接到数据库")
-            return connection
+        # 直接连接到项目目录中的SQLite数据库文件
+        connection = sqlite3.connect('japanese_learning.db')
+        print("成功连接到SQLite数据库")
+        return connection
     except Error as e:
         print(f"数据库连接错误：{e}")
     return None
+
 
 def main():
     connection = get_db_connection()
@@ -95,6 +97,7 @@ def main():
         find_word(connection)
         connection.close()
         print("数据库连接已关闭")
+
 
 if __name__ == "__main__":
     main()

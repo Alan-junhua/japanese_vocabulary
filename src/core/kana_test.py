@@ -345,3 +345,4 @@ if __name__ == "__main__":
             print(f"已获取的正确选项：{question_data['correct_option']}")
         if "wrong_options" in question_data and question_data["wrong_options"]:
             print(f"已生成的错误选项：{question_data['wrong_options']}")
+
