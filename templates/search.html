@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>词汇查找</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .container { max-width: 960px; margin: 40px auto; padding: 0 16px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+    .pill { padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 9999px; cursor: pointer; }
+    .pill.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🔎 词汇查找</h2>
+    <p><a href="/">返回首页</a></p>
+
+    <div class="row" style="margin: 12px 0;">
+      <span id="pill-jp" class="pill active" data-type="jp">按日文</span>
+      <span id="pill-zh" class="pill" data-type="zh">按中文</span>
+    </div>
+
+    <div class="row">
+      <input id="keyword" type="text" placeholder="输入关键词" style="flex:1; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px;" />
+      <button id="btnSearch" style="padding: 10px 14px;">查询</button>
+    </div>
+
+    <div id="msg" style="margin: 10px 0; color: #dc2626;"></div>
+
+    <table id="resultTable" style="margin-top: 10px;">
+      <thead>
+        <tr>
+          <th>单词</th>
+          <th>读音</th>
+          <th>中文意思</th>
+          <th>所属课文</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    const pillJp = document.getElementById('pill-jp');
+    const pillZh = document.getElementById('pill-zh');
+    const keywordEl = document.getElementById('keyword');
+    const btnSearch = document.getElementById('btnSearch');
+    const msgEl = document.getElementById('msg');
+    const tbody = document.querySelector('#resultTable tbody');
+
+    let currentType = 'jp';
+
+    function setType(type) {
+      currentType = type;
+      if (type === 'jp') { pillJp.classList.add('active'); pillZh.classList.remove('active'); }
+      else { pillZh.classList.add('active'); pillJp.classList.remove('active'); }
+    }
+
+    pillJp.addEventListener('click', () => setType('jp'));
+    pillZh.addEventListener('click', () => setType('zh'));
+
+    btnSearch.addEventListener('click', async () => {
+      msgEl.textContent = '';
+      tbody.innerHTML = '';
+      const keyword = keywordEl.value.trim();
+      if (!keyword) { msgEl.textContent = '关键词不能为空'; return; }
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: currentType, keyword })
+        });
+        const data = await res.json();
+        if (!data.ok) { msgEl.textContent = data.message || '查询失败'; return; }
+        if (!data.results || data.results.length === 0) { msgEl.textContent = '未找到结果'; return; }
+        tbody.innerHTML = data.results.map(r => `
+          <tr>
+            <td>${r.word || ''}</td>
+            <td>${r.hiragana || ''}</td>
+            <td>${r.meaning || ''}</td>
+            <td>${r.lesson || ''}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        msgEl.textContent = '请求异常：' + e;
+      }
+    });
+  </script>
+</body>
+<!-- 简易版本：可后续增强分页、拼音输入法、模糊权重等 -->
+</html>
+
+
+
+

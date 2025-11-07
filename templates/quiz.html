@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>平假名识别测试</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .container { max-width: 960px; margin: 40px auto; padding: 0 16px; }
+    .question { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .opt { display: inline-block; margin: 6px 6px 0 0; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; }
+    .opt.selected { border-color: #2563eb; background: #eff6ff; }
+    .result { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>📝 平假名识别测试</h2>
+    <p><a href="/">返回首页</a></p>
+
+    <div>
+      <label>课次（all / 单数字 如 3 / 范围如 1-7）：</label>
+      <input id="lesson" type="text" placeholder="all" />
+      <label style="margin-left:8px;">题量(1-50)：</label>
+      <input id="count" type="number" value="10" min="1" max="50" />
+      <button id="btnGen">生成题目</button>
+    </div>
+
+    <div id="msg" style="margin: 10px 0; color: #dc2626;"></div>
+
+    <div id="quiz"></div>
+
+    <div id="summary" style="display:none; margin-top: 16px;"></div>
+  </div>
+
+  <script>
+    const btnGen = document.getElementById('btnGen');
+    const lessonEl = document.getElementById('lesson');
+    const countEl = document.getElementById('count');
+    const msgEl = document.getElementById('msg');
+    const quizEl = document.getElementById('quiz');
+    const summaryEl = document.getElementById('summary');
+
+    let questions = [];
+    let answers = [];
+
+    btnGen.addEventListener('click', async () => {
+      msgEl.textContent = '';
+      quizEl.innerHTML = '';
+      summaryEl.style.display = 'none';
+      answers = [];
+      try {
+        const res = await fetch('/api/quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lesson: lessonEl.value.trim() || 'all', count: countEl.value })
+        });
+        const data = await res.json();
+        if (!data.ok) { msgEl.textContent = data.message || '生成失败'; return; }
+        questions = data.questions || [];
+        if (questions.length === 0) { msgEl.textContent = '没有可用题目'; return; }
+        renderQuiz();
+      } catch (e) {
+        msgEl.textContent = '请求异常：' + e;
+      }
+    });
+
+    function renderQuiz() {
+      quizEl.innerHTML = questions.map((q, idx) => {
+        const opts = q.options.map((opt, i) => `<span class="opt" data-q="${idx}" data-i="${i}">${i+1}. ${opt}</span>`).join('');
+        return `
+          <div class="question">
+            <div><strong>第${idx+1}题</strong>：单词：<strong>${q.word}</strong></div>
+            <div style="margin-top:4px;">${opts}</div>
+            <div class="result" id="r-${idx}"></div>
+          </div>
+        `;
+      }).join('') + `<button id="btnSubmit" style="margin-top: 8px;">提交答案</button>`;
+
+      document.querySelectorAll('.opt').forEach(el => {
+        el.addEventListener('click', () => {
+          const qi = Number(el.getAttribute('data-q'));
+          const oi = Number(el.getAttribute('data-i'));
+          answers[qi] = oi;
+          // UI 标记
+          document.querySelectorAll(`.opt[data-q="${qi}"]`).forEach(x => x.classList.remove('selected'));
+          el.classList.add('selected');
+        });
+      });
+
+      document.getElementById('btnSubmit').addEventListener('click', submitAnswers);
+    }
+
+    function submitAnswers() {
+      let correct = 0;
+      questions.forEach((q, idx) => {
+        const chosen = answers[idx];
+        const correctIdx = q.correctIndex;
+        const r = document.getElementById(`r-${idx}`);
+        if (chosen === correctIdx) { correct += 1; r.textContent = '✅ 正确'; r.style.color = '#16a34a'; }
+        else { r.textContent = `❌ 错误（正确答案：${q.options[correctIdx]}）`; r.style.color = '#dc2626'; }
+      });
+      const total = questions.length;
+      summaryEl.style.display = 'block';
+      summaryEl.textContent = `成绩：${correct}/${total}，正确率 ${(correct/total*100).toFixed(1)}%`;
+    }
+  </script>
+</body>
+</html>
+
+
+
+
