@@ -12,6 +12,12 @@ if BASE_DIR not in sys.path:
 # 复用现有核心逻辑
 from src.core.random_kana import SQLiteDB, generate_question
 from src.core.lesson_words import get_lessons, get_words_by_lessons
+from src.core.user_note import (
+    ensure_user_note_table,
+    fetch_user_notes,
+    delete_user_note,
+    record_wrong_word,
+)
 
 
 app = Flask(
@@ -78,6 +84,11 @@ def quiz_page():
 @app.route("/lessons", methods=["GET"])
 def lessons_page():
     return render_template("lessons.html")
+
+
+@app.route("/notes", methods=["GET"])
+def notes_page():
+    return render_template("user_notes.html")
 
 
 @app.route("/api/search", methods=["POST"]) 
@@ -165,6 +176,21 @@ def api_quiz():
         return jsonify({"ok": False, "message": str(e)}), 500
 
 
+@app.route("/api/quiz/wrong", methods=["POST"])
+def api_quiz_wrong():
+    data = request.get_json(silent=True) or request.form
+    word = (data.get("word") or "").strip()
+    if not word:
+        return jsonify({"ok": False, "message": "单词不能为空"}), 400
+    try:
+        conn = get_sqlite_connection()
+        record_wrong_word(conn, word)
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
 @app.route("/api/lessons", methods=["GET"]) 
 def api_lessons():
     try:
@@ -172,6 +198,46 @@ def api_lessons():
         lessons = get_lessons(conn)
         conn.close()
         return jsonify({"ok": True, "lessons": lessons})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.route("/api/user_notes", methods=["GET"])
+def api_user_notes():
+    try:
+        conn = get_sqlite_connection()
+        ensure_user_note_table(conn)
+        rows = fetch_user_notes(conn)
+        conn.close()
+        notes = [
+            {
+                "word": r[0],
+                "hiragana": r[1],
+                "meaning": r[2],
+                "lesson": r[3],
+                "wrongCount": r[4],
+                "lastWrongAt": r[5],
+            }
+            for r in rows
+        ]
+        return jsonify({"ok": True, "notes": notes})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.route("/api/user_notes/delete", methods=["POST"])
+def api_user_notes_delete():
+    data = request.get_json(silent=True) or request.form
+    word = (data.get("word") or "").strip()
+    if not word:
+        return jsonify({"ok": False, "message": "单词不能为空"}), 400
+    try:
+        conn = get_sqlite_connection()
+        deleted = delete_user_note(conn, word)
+        conn.close()
+        if not deleted:
+            return jsonify({"ok": False, "message": "未找到记录"}), 404
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)}), 500
 

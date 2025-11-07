@@ -17,6 +17,7 @@
   <div class="container">
     <h2>📝 平假名识别测试</h2>
     <p><a href="/">返回首页</a></p>
+    <p style="color:#4b5563;">提示：提交答案后，做错的单词会自动加入收藏列表，可在“收藏单词”页面查看和删除。</p>
 
     <div>
       <label>课次（all / 单数字 如 3 / 范围如 1-7）：</label>
@@ -88,25 +89,45 @@
         });
       });
 
-      document.getElementById('btnSubmit').addEventListener('click', submitAnswers);
+      document.getElementById('btnSubmit').addEventListener('click', () => {
+        submitAnswers();
+      });
     }
 
-    function submitAnswers() {
+    async function submitAnswers() {
       let correct = 0;
+      const wrongWords = [];
       questions.forEach((q, idx) => {
         const chosen = answers[idx];
         const correctIdx = q.correctIndex;
         const r = document.getElementById(`r-${idx}`);
         if (chosen === correctIdx) { correct += 1; r.textContent = '✅ 正确'; r.style.color = '#16a34a'; }
-        else { r.textContent = `❌ 错误（正确答案：${q.options[correctIdx]}）`; r.style.color = '#dc2626'; }
+        else {
+          r.textContent = `❌ 错误（正确答案：${q.options[correctIdx]}）`;
+          r.style.color = '#dc2626';
+          wrongWords.push(q.word);
+        }
       });
       const total = questions.length;
       summaryEl.style.display = 'block';
       summaryEl.textContent = `成绩：${correct}/${total}，正确率 ${(correct/total*100).toFixed(1)}%`;
+      if (wrongWords.length > 0) {
+        summaryEl.textContent += `（已将 ${wrongWords.length} 个错题加入收藏）`;
+        try {
+          await Promise.all(wrongWords.map(word => fetch('/api/quiz/wrong', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word })
+          })));
+        } catch (e) {
+          console.error('错题收藏失败', e);
+        }
+      }
     }
   </script>
 </body>
 </html>
+
 
 
 

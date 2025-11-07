@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import random
 # 导入工具模块的核心类和函数
 from random_kana import SQLiteDB, generate_question, DEBUG_MODE
+from user_note import ensure_user_note_table, record_wrong_word
 
 # ------------------- 全局配置（应用逻辑专属：题目数量选项）-------------------
 QUESTION_COUNT_OPTIONS = [10, 20, 30, 40, 50]  # 用户可选择的题目数量
@@ -92,6 +93,7 @@ def run_kana_test():
     db = SQLiteDB()
     try:
         with db as conn:
+            ensure_user_note_table(conn)
             # 1. 步骤1：用户选择课程范围
             lesson_pattern = parse_lesson_input()
             # 2. 步骤2：用户选择题目数量
@@ -162,6 +164,7 @@ def run_kana_test():
                     correct_count += 1
                 else:
                     print(f"❌ 回答错误！正确答案：{q['correct']}")
+                    record_wrong_word(conn, q['word'])
 
             # 7. 步骤7：展示最终成绩
             acc = (correct_count / actual_count) * 100
