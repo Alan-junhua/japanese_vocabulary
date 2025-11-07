@@ -11,6 +11,7 @@ if BASE_DIR not in sys.path:
 
 # 复用现有核心逻辑
 from src.core.random_kana import SQLiteDB, generate_question
+from src.core.lesson_words import get_lessons, get_words_by_lessons
 
 
 app = Flask(
@@ -72,6 +73,11 @@ def search_page():
 @app.route("/quiz", methods=["GET"])
 def quiz_page():
     return render_template("quiz.html")
+
+
+@app.route("/lessons", methods=["GET"])
+def lessons_page():
+    return render_template("lessons.html")
 
 
 @app.route("/api/search", methods=["POST"]) 
@@ -155,6 +161,34 @@ def api_quiz():
                 })
 
         return jsonify({"ok": True, "questions": questions})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.route("/api/lessons", methods=["GET"]) 
+def api_lessons():
+    try:
+        conn = get_sqlite_connection()
+        lessons = get_lessons(conn)
+        conn.close()
+        return jsonify({"ok": True, "lessons": lessons})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.route("/api/lesson_words", methods=["POST"]) 
+def api_lesson_words():
+    data = request.get_json(silent=True) or request.form
+    lesson = (data.get("lesson") or "all").strip()
+    try:
+        conn = get_sqlite_connection()
+        rows = get_words_by_lessons(conn, lesson)
+        conn.close()
+        results = [
+            {"word": r[0], "hiragana": r[1], "meaning": r[2], "lesson": r[3]}
+            for r in rows
+        ]
+        return jsonify({"ok": True, "results": results})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)}), 500
 

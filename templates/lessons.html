@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>按课查看单词</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .container { max-width: 960px; margin: 40px auto; padding: 0 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>📚 按课查看单词</h2>
+    <p><a href="/">返回首页</a></p>
+
+    <div style="margin: 12px 0; display:flex; gap:8px; align-items:center;">
+      <label>选择课次：</label>
+      <select id="lesson" style="padding: 8px; min-width: 160px;"></select>
+      <button id="btnLoad" style="padding: 8px 12px;">加载单词</button>
+    </div>
+
+    <div id="msg" style="margin: 10px 0; color: #dc2626;"></div>
+
+    <table id="resultTable" style="margin-top: 10px;">
+      <thead>
+        <tr>
+          <th>单词</th>
+          <th>读音</th>
+          <th>中文意思</th>
+          <th>所属课文</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    const lessonEl = document.getElementById('lesson');
+    const btnLoad = document.getElementById('btnLoad');
+    const msgEl = document.getElementById('msg');
+    const tbody = document.querySelector('#resultTable tbody');
+
+    async function loadLessons() {
+      try {
+        const res = await fetch('/api/lessons');
+        const data = await res.json();
+        if (!data.ok) { msgEl.textContent = data.message || '加载课次失败'; return; }
+        const lessons = data.lessons || [];
+        const options = ['<option value="all">全部</option>']
+          .concat(lessons.map(l => `<option value="${l}">${l}</option>`))
+          .join('');
+        lessonEl.innerHTML = options;
+      } catch (e) {
+        msgEl.textContent = '请求异常：' + e;
+      }
+    }
+
+    async function loadWords() {
+      msgEl.textContent = '';
+      tbody.innerHTML = '';
+      try {
+        const res = await fetch('/api/lesson_words', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lesson: lessonEl.value })
+        });
+        const data = await res.json();
+        if (!data.ok) { msgEl.textContent = data.message || '加载失败'; return; }
+        const rows = data.results || [];
+        if (rows.length === 0) { msgEl.textContent = '该课暂无单词'; return; }
+        tbody.innerHTML = rows.map(r => `
+          <tr>
+            <td>${r.word || ''}</td>
+            <td>${r.hiragana || ''}</td>
+            <td>${r.meaning || ''}</td>
+            <td>${r.lesson || ''}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        msgEl.textContent = '请求异常：' + e;
+      }
+    }
+
+    btnLoad.addEventListener('click', loadWords);
+    loadLessons().then(loadWords);
+  </script>
+</body>
+</html>
+
+
+
