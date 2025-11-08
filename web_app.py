@@ -17,6 +17,13 @@ from src.core.user_note import (
     fetch_user_notes,
     delete_user_note,
     record_wrong_word,
+    get_favorited_words,
+)
+from src.core.study_record import (
+    ensure_study_records_table,
+    record_study,
+    record_study_batch,
+    get_today_stats,
 )
 
 
@@ -114,6 +121,7 @@ def api_search():
                 (f"%{keyword}%",),
             )
         rows = cur.fetchall()
+        favorited_words = get_favorited_words(conn)
         cur.close()
         conn.close()
         results = [
@@ -122,6 +130,7 @@ def api_search():
                 "hiragana": r[1],
                 "meaning": r[2],
                 "lesson": r[3],
+                "favorited": r[0] in favorited_words
             }
             for r in rows
         ]
@@ -169,6 +178,8 @@ def api_quiz():
                     "word": q["word"],
                     "options": opts,
                     "correctIndex": correct_index,
+                    "showMeaning": q.get("show_meaning", False),
+                    "meaning": q.get("meaning", "")
                 })
 
         return jsonify({"ok": True, "questions": questions})
@@ -187,6 +198,22 @@ def api_quiz_wrong():
         record_wrong_word(conn, word)
         conn.close()
         return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.route("/api/user_notes/add", methods=["POST"])
+def api_user_notes_add():
+    """收藏单词接口。"""
+    data = request.get_json(silent=True) or request.form
+    word = (data.get("word") or "").strip()
+    if not word:
+        return jsonify({"ok": False, "message": "单词不能为空"}), 400
+    try:
+        conn = get_sqlite_connection()
+        record_wrong_word(conn, word)
+        conn.close()
+        return jsonify({"ok": True, "message": "收藏成功"})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)}), 500
 
@@ -249,12 +276,72 @@ def api_lesson_words():
     try:
         conn = get_sqlite_connection()
         rows = get_words_by_lessons(conn, lesson)
+        favorited_words = get_favorited_words(conn)
         conn.close()
         results = [
-            {"word": r[0], "hiragana": r[1], "meaning": r[2], "lesson": r[3]}
+            {
+                "word": r[0], 
+                "hiragana": r[1], 
+                "meaning": r[2], 
+                "lesson": r[3],
+                "favorited": r[0] in favorited_words
+            }
             for r in rows
         ]
         return jsonify({"ok": True, "results": results})
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.route("/api/today_stats", methods=["GET"])
+def api_today_stats():
+    """获取今日学习统计。"""
+    try:
+        conn = get_sqlite_connection()
+        ensure_study_records_table(conn)
+        total, accuracy = get_today_stats(conn)
+        conn.close()
+        return jsonify({
+            "ok": True,
+            "total": total,
+            "accuracy": accuracy,
+            "correct": int(total * accuracy / 100) if total > 0 else 0
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
+
+
+@app.route("/api/study/record", methods=["POST"])
+def api_study_record():
+    """记录学习记录。"""
+    data = request.get_json(silent=True) or request.form
+    word = (data.get("word") or "").strip()
+    is_correct = data.get("is_correct", False)
+    
+    # 支持批量记录
+    records = data.get("records", [])
+    
+    if not word and not records:
+        return jsonify({"ok": False, "message": "单词或记录列表不能为空"}), 400
+    
+    try:
+        conn = get_sqlite_connection()
+        ensure_study_records_table(conn)
+        
+        if records:
+            # 批量记录
+            record_list = [
+                (r.get("word", ""), r.get("is_correct", False))
+                for r in records
+                if r.get("word")
+            ]
+            record_study_batch(conn, record_list)
+        else:
+            # 单条记录
+            record_study(conn, word, is_correct)
+        
+        conn.close()
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)}), 500
 

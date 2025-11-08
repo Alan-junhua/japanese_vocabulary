@@ -104,3 +104,29 @@ def record_wrong_word(conn: sqlite3.Connection, word: str) -> None:
         record_wrong_answer(conn, word, None, None, None)
 
 
+def is_word_favorited(conn: sqlite3.Connection, word: str) -> bool:
+    """检查单词是否已收藏。"""
+    ensure_user_note_table(conn)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"SELECT 1 FROM {TABLE_USER_NOTE} WHERE word = ? LIMIT 1;",
+            (word,),
+        )
+        return cursor.fetchone() is not None
+    finally:
+        cursor.close()
+
+
+def get_favorited_words(conn: sqlite3.Connection) -> set:
+    """获取所有已收藏的单词集合。"""
+    ensure_user_note_table(conn)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(f"SELECT word FROM {TABLE_USER_NOTE};")
+        rows = cursor.fetchall()
+        return {row[0] for row in rows}
+    finally:
+        cursor.close()
+
+

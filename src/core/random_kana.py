@@ -91,6 +91,11 @@ def get_modifiable_positions(group_id_list):
     return [idx for idx, gid in enumerate(group_id_list) if gid and gid != 0]
 
 
+def get_delete_positions(group_id_list):
+    """筛选需要删除的字符位置（confusion_group_id == 100）"""
+    return [idx for idx, gid in enumerate(group_id_list) if gid == 100]
+
+
 def modify_single_position(conn, current_char, current_gid):
     """单个字符错误替换（内部工具）"""
     cursor = None
@@ -136,34 +141,96 @@ def generate_wrong_options(conn, original_hira):
     wrong_opts = set()
     attempt = 0
     original_chars = list(original_hira)
+    
+    # 获取可删除的位置（confusion_group_id == 100）
+    delete_pos = get_delete_positions(group_ids)
+    # 获取可替换的位置（confusion_group_id != 0 且 != 100）
+    modifiable_pos = [idx for idx, gid in enumerate(group_ids) if gid and gid != 0 and gid != 100]
+
+    # 如果既没有可删除的也没有可替换的，直接返回
+    if not delete_pos and not modifiable_pos:
+        if DEBUG_MODE:
+            print(f"【调试】{original_hira}：无可用修改位置")
+        return [], False
 
     while len(wrong_opts) < DEFAULT_WRONG_OPTION_COUNT and attempt < MAX_ATTEMPT_GENERATE_WRONG:
         attempt += 1
         modified = original_chars.copy()
-        modifiable_pos = get_modifiable_positions(group_ids)
-
-        if not modifiable_pos:
-            if DEBUG_MODE:
-                print(f"【调试】{original_hira}：无可用修改位置")
-            break
-
-        # 随机修改1-2个字符（避免错误离谱）
-        modify_count = random.choice([1, 2]) if len(modifiable_pos) >= 2 else 1
-        for pos in random.sample(modifiable_pos, modify_count):
-            char = modified[pos]
-            gid = group_ids[pos]
-            new_char, log = modify_single_position(conn, char, gid)
-            
-            if not new_char:
-                if DEBUG_MODE:
-                    print(f"【调试】{original_hira}：修改失败（{log}）")
-                break
-            modified[pos] = new_char
+        modified_group_ids = group_ids.copy()
+        operation_performed = False
+        
+        # 决定执行哪些操作
+        # 如果只有删除位置，必须执行删除
+        # 如果只有替换位置，必须执行替换
+        # 如果两者都有，随机选择执行删除、替换或两者都执行
+        if delete_pos and not modifiable_pos:
+            # 只有删除位置
+            do_delete = True
+            do_replace = False
+        elif modifiable_pos and not delete_pos:
+            # 只有替换位置
+            do_delete = False
+            do_replace = True
         else:
-            # 所有选中位置都修改成功
+            # 两者都有，随机选择
+            do_delete = random.random() < 0.6
+            do_replace = not do_delete or random.random() < 0.5  # 如果执行删除，50%概率也执行替换
+        
+        # 执行删除操作
+        if do_delete and delete_pos:
+            delete_count = random.choice([1, 2]) if len(delete_pos) >= 2 else 1
+            positions_to_delete = random.sample(delete_pos, min(delete_count, len(delete_pos)))
+            # 按从后往前删除，避免索引偏移问题
+            positions_to_delete.sort(reverse=True)
+            for pos in positions_to_delete:
+                if pos < len(modified):
+                    modified.pop(pos)
+                    modified_group_ids.pop(pos)
+                    operation_performed = True
+            if DEBUG_MODE and operation_performed:
+                deleted_chars = [original_chars[p] for p in positions_to_delete if p < len(original_chars)]
+                print(f"【调试】{original_hira}：删除字符 {deleted_chars}")
+        
+        # 执行替换操作
+        if do_replace:
+            # 使用删除后的位置列表
+            current_modifiable_pos = [idx for idx, gid in enumerate(modified_group_ids) if gid and gid != 0 and gid != 100]
+            if current_modifiable_pos:
+                replace_count = random.choice([1, 2]) if len(current_modifiable_pos) >= 2 else 1
+                positions_to_replace = random.sample(
+                    current_modifiable_pos, 
+                    min(replace_count, len(current_modifiable_pos))
+                )
+                replace_success = True
+                for pos in positions_to_replace:
+                    if pos >= len(modified):
+                        replace_success = False
+                        break
+                    char = modified[pos]
+                    gid = modified_group_ids[pos]
+                    new_char, log = modify_single_position(conn, char, gid)
+                    
+                    if not new_char:
+                        if DEBUG_MODE:
+                            print(f"【调试】{original_hira}：替换失败（{log}）")
+                        replace_success = False
+                        break
+                    modified[pos] = new_char
+                    operation_performed = True
+                
+                # 如果替换失败，但之前有删除操作，仍然保留删除的结果
+                # 如果替换失败且没有删除操作，跳过这次尝试
+                if not replace_success and not operation_performed:
+                    continue
+        
+        # 如果执行了操作，添加到错误选项集合
+        if operation_performed:
             wrong_opt = "".join(modified)
-            if wrong_opt != original_hira:
+            # 确保结果不为空且与原始不同
+            if wrong_opt and wrong_opt != original_hira and len(wrong_opt) > 0:
                 wrong_opts.add(wrong_opt)
+                if DEBUG_MODE:
+                    print(f"【调试】{original_hira} → {wrong_opt}")
 
     # 判定是否有效（满足错误选项数量）
     wrong_opts = list(wrong_opts)
@@ -182,8 +249,42 @@ def generate_question(conn, word, original_hira):
     # 组合选项并打乱
     all_opts = wrong_opts + [original_hira]
     random.shuffle(all_opts)
+    
+    # 检查题目显示的单词是否与四个选项中的任何一个完全一样
+    # 如果一样，则需要显示中文意思而不是日文单词，避免题目和选项重复
+    show_meaning = (word in all_opts)
+    meaning = None
+    if show_meaning:
+        # 从数据库获取单词的中文意思
+        cursor = None
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT meaning FROM vocabulary WHERE word = ? LIMIT 1;",
+                (word,)
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                meaning = row[0]
+            else:
+                # 如果获取不到中文意思，跳过这道题
+                # 因为题目和选项会完全一样，没有测试意义
+                if DEBUG_MODE:
+                    print(f"【调试】单词 {word} 与平假名相同但无中文意思，跳过此题")
+                return None
+        except Error as e:
+            if DEBUG_MODE:
+                print(f"【调试】获取单词意思失败：{e}")
+            # 查询失败时也跳过此题
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+    
     return {
         "word": word,
         "correct": original_hira,
-        "options": all_opts
+        "options": all_opts,
+        "show_meaning": show_meaning,
+        "meaning": meaning
     }

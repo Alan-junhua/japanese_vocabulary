@@ -69,9 +69,13 @@
     function renderQuiz() {
       quizEl.innerHTML = questions.map((q, idx) => {
         const opts = q.options.map((opt, i) => `<span class="opt" data-q="${idx}" data-i="${i}">${i+1}. ${opt}</span>`).join('');
+        // 如果showMeaning为true，显示中文意思；否则显示日文单词
+        // 注意：showMeaning为true时，meaning一定存在（后端已过滤）
+        const displayText = q.showMeaning ? q.meaning : q.word;
+        const label = q.showMeaning ? '中文意思' : '单词';
         return `
           <div class="question">
-            <div><strong>第${idx+1}题</strong>：单词：<strong>${q.word}</strong></div>
+            <div><strong>第${idx+1}题</strong>：${label}：<strong>${displayText}</strong></div>
             <div style="margin-top:4px;">${opts}</div>
             <div class="result" id="r-${idx}"></div>
           </div>
@@ -97,20 +101,47 @@
     async function submitAnswers() {
       let correct = 0;
       const wrongWords = [];
+      const studyRecords = []; // 学习记录
+      
       questions.forEach((q, idx) => {
         const chosen = answers[idx];
         const correctIdx = q.correctIndex;
+        const isCorrect = chosen === correctIdx;
         const r = document.getElementById(`r-${idx}`);
-        if (chosen === correctIdx) { correct += 1; r.textContent = '✅ 正确'; r.style.color = '#16a34a'; }
-        else {
+        
+        if (isCorrect) {
+          correct += 1;
+          r.textContent = '✅ 正确';
+          r.style.color = '#16a34a';
+        } else {
           r.textContent = `❌ 错误（正确答案：${q.options[correctIdx]}）`;
           r.style.color = '#dc2626';
           wrongWords.push(q.word);
         }
+        
+        // 记录学习记录
+        studyRecords.push({
+          word: q.word,
+          is_correct: isCorrect
+        });
       });
+      
       const total = questions.length;
       summaryEl.style.display = 'block';
       summaryEl.textContent = `成绩：${correct}/${total}，正确率 ${(correct/total*100).toFixed(1)}%`;
+      
+      // 批量记录学习记录
+      try {
+        await fetch('/api/study/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: studyRecords })
+        });
+      } catch (e) {
+        console.error('学习记录保存失败', e);
+      }
+      
+      // 记录错题
       if (wrongWords.length > 0) {
         summaryEl.textContent += `（已将 ${wrongWords.length} 个错题加入收藏）`;
         try {

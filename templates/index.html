@@ -6,41 +6,213 @@
   <title>新标日（初级）词典 - 首页</title>
   <link rel="stylesheet" href="/static/css/styles.css" />
   <style>
-    .container { max-width: 880px; margin: 40px auto; padding: 0 16px; }
-    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
-    .actions a { display: inline-block; margin-right: 12px; padding: 10px 14px; background: #2563eb; color: #fff; border-radius: 8px; text-decoration: none; }
+    .main-wrapper {
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 0 24px;
+      display: flex;
+      gap: 48px;
+      align-items: flex-start;
+    }
+    .left-section {
+      flex: 0 0 320px;
+      padding-top: 60px;
+    }
+    .description {
+      font-size: 16px;
+      line-height: 1.8;
+      color: #4b5563;
+      background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+      padding: 32px;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .description h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #111827;
+      margin: 0 0 16px 0;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #2563eb;
+    }
+    .description p {
+      margin: 0;
+      text-align: justify;
+      letter-spacing: 0.3px;
+    }
+    .right-section {
+      flex: 1;
+      min-width: 0;
+    }
+    .container {
+      max-width: 880px;
+      margin: 0;
+    }
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+      background: #ffffff;
+      transition: box-shadow 0.2s ease;
+    }
+    .card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    .actions a {
+      display: inline-block;
+      margin-right: 12px;
+      padding: 10px 14px;
+      background: #2563eb;
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+    .actions a:hover {
+      background: #1d4ed8;
+      text-decoration: none;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    .stats-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+    .stats-card h3 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      color: #1e40af;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .stats-content {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      flex: 1;
+      min-width: 120px;
+    }
+    .stat-label {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 600;
+      color: #1e40af;
+    }
+    .stat-sub {
+      font-size: 14px;
+      color: #4b5563;
+      margin-top: 4px;
+    }
+    /* 响应式设计 */
+    @media (max-width: 968px) {
+      .main-wrapper {
+        flex-direction: column;
+        gap: 32px;
+      }
+      .left-section {
+        flex: 1;
+        width: 100%;
+        padding-top: 0;
+      }
+      .right-section {
+        width: 100%;
+      }
+      .stats-content {
+        flex-direction: column;
+        gap: 16px;
+      }
+    }
   </style>
+  <script>
+    // 加载今日学习统计
+    async function loadTodayStats() {
+      try {
+        const res = await fetch('/api/today_stats');
+        const data = await res.json();
+        if (data.ok) {
+          document.getElementById('statTotal').textContent = data.total || 0;
+          document.getElementById('statAccuracy').textContent = (data.accuracy || 0) + '%';
+          document.getElementById('statCorrect').textContent = `正确: ${data.correct || 0} 题`;
+        }
+      } catch (e) {
+        console.error('加载统计失败', e);
+      }
+    }
+    
+    // 页面加载时获取统计
+    window.addEventListener('DOMContentLoaded', loadTodayStats);
+  </script>
   </head>
 <body>
-  <div class="container">
-    <h1>🎯 新标日（初级）词典</h1>
-    <p>请选择功能：</p>
-    <div class="card">
-      <h3>词汇查找</h3>
-      <p>支持按日文或中文查询词汇</p>
-      <div class="actions">
-        <a href="/search">进入查询</a>
+  <div class="main-wrapper">
+    <div class="left-section">
+      <div class="description">
+        <h2>关于词典</h2>
+        <p>此词典面向日语初学者，囊括新标准日语（初级）上下（n5-n4）两册所有课后单词，词典仍在优化中。</p>
       </div>
     </div>
-    <div class="card">
-      <h3>平假名识别测试</h3>
-      <p>选择课次与题量，生成测试题</p>
-      <div class="actions">
-        <a href="/quiz">开始测试</a>
-      </div>
-    </div>
-    <div class="card">
-      <h3>按课查看单词</h3>
-      <p>选择课次，查看该课所有单词</p>
-      <div class="actions">
-        <a href="/lessons">进入查看</a>
-      </div>
-    </div>
-    <div class="card">
-      <h3>收藏单词</h3>
-      <p>查看并管理错题收藏</p>
-      <div class="actions">
-        <a href="/notes">打开收藏</a>
+    <div class="right-section">
+      <div class="container">
+        <h1>🎯 新标日（初级）词典</h1>
+        <p>请选择功能：</p>
+        
+        <div class="stats-card" id="statsCard">
+          <h3>📊 今日学习统计</h3>
+          <div class="stats-content">
+            <div class="stat-item">
+              <div class="stat-label">做题总数</div>
+              <div class="stat-value" id="statTotal">0</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">正确率</div>
+              <div class="stat-value" id="statAccuracy">0%</div>
+              <div class="stat-sub" id="statCorrect">正确: 0 题</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <h3>词汇查找</h3>
+          <p>支持按日文或中文查询词汇</p>
+          <div class="actions">
+            <a href="/search">进入查询</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>平假名识别测试</h3>
+          <p>选择课次与题量，生成测试题</p>
+          <div class="actions">
+            <a href="/quiz">开始测试</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>按课查看单词</h3>
+          <p>选择课次，查看该课所有单词</p>
+          <div class="actions">
+            <a href="/lessons">进入查看</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>收藏单词</h3>
+          <p>查看并管理错题收藏</p>
+          <div class="actions">
+            <a href="/notes">打开收藏</a>
+          </div>
+        </div>
       </div>
     </div>
   </div>

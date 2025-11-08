@@ -9,6 +9,24 @@
     .container { max-width: 960px; margin: 40px auto; padding: 0 16px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+    .favorite-btn { 
+      padding: 4px 12px; 
+      border: 1px solid #e5e7eb; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      background: #fff;
+      font-size: 14px;
+    }
+    .favorite-btn:hover { background: #f3f4f6; }
+    .favorite-btn.favorited { 
+      background: #fef3c7; 
+      border-color: #fbbf24; 
+      color: #92400e;
+    }
+    .favorite-btn:disabled { 
+      opacity: 0.6; 
+      cursor: not-allowed; 
+    }
   </style>
 </head>
 <body>
@@ -31,6 +49,7 @@
           <th>读音</th>
           <th>中文意思</th>
           <th>所属课文</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -77,8 +96,53 @@
             <td>${r.hiragana || ''}</td>
             <td>${r.meaning || ''}</td>
             <td>${r.lesson || ''}</td>
+            <td>
+              <button class="favorite-btn ${r.favorited ? 'favorited' : ''}" 
+                      data-word="${r.word || ''}" 
+                      data-favorited="${r.favorited || false}">
+                ${r.favorited ? '⭐ 已收藏' : '☆ 收藏'}
+              </button>
+            </td>
           </tr>
         `).join('');
+        
+        // 绑定收藏按钮事件
+        tbody.querySelectorAll('.favorite-btn').forEach(btn => {
+          btn.addEventListener('click', async function() {
+            const word = this.getAttribute('data-word');
+            const isFavorited = this.getAttribute('data-favorited') === 'true';
+            if (!word) return;
+            
+            if (isFavorited) {
+              msgEl.textContent = '该单词已收藏，可在收藏单词页面查看';
+              return;
+            }
+            
+            this.disabled = true;
+            try {
+              const res = await fetch('/api/user_notes/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ word })
+              });
+              const data = await res.json();
+              if (!data.ok) {
+                msgEl.textContent = data.message || '收藏失败';
+                this.disabled = false;
+                return;
+              }
+              // 更新按钮状态
+              this.classList.add('favorited');
+              this.setAttribute('data-favorited', 'true');
+              this.textContent = '⭐ 已收藏';
+              this.disabled = false;
+              msgEl.textContent = '';
+            } catch (e) {
+              msgEl.textContent = '请求异常：' + e;
+              this.disabled = false;
+            }
+          });
+        });
       } catch (e) {
         msgEl.textContent = '请求异常：' + e;
       }
@@ -89,6 +153,7 @@
   </script>
 </body>
 </html>
+
 
 
 
