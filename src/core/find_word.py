@@ -82,8 +82,16 @@ def find_word(connection):  # 查找单词
 def get_db_connection():
     """获取SQLite数据库连接"""
     try:
-        # 直接连接到项目目录中的SQLite数据库文件
-        connection = sqlite3.connect('japanese_learning.db')
+        # 支持PyInstaller打包后的路径处理
+        import sys
+        if getattr(sys, 'frozen', False):
+            # 打包后的可执行文件：数据库放在可执行文件所在目录
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # 开发环境：数据库放在当前工作目录
+            base_dir = os.getcwd()
+        db_path = os.path.join(base_dir, 'japanese_learning.db')
+        connection = sqlite3.connect(db_path)
         print("成功连接到SQLite数据库")
         return connection
     except Error as e:

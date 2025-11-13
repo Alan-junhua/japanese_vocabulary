@@ -15,7 +15,15 @@ VALID_HIRAGANA_CONDITION = "hiragana IS NOT NULL AND TRIM(hiragana) != ''"
 # ------------------- 数据库工具类 -------------------
 class SQLiteDB:
     def __init__(self, db_name="japanese_learning.db"):
-        self.db_path = os.path.join(os.getcwd(), db_name)
+        # 支持PyInstaller打包后的路径处理
+        import sys
+        if getattr(sys, 'frozen', False):
+            # 打包后的可执行文件：数据库放在可执行文件所在目录
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # 开发环境：数据库放在当前工作目录
+            base_dir = os.getcwd()
+        self.db_path = os.path.join(base_dir, db_name)
         self.connection = None
 
     def __enter__(self):

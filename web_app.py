@@ -5,7 +5,16 @@ import os
 import sys
 
 # 计算工程根目录并修正模块搜索路径，防止导入失败
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 支持PyInstaller打包后的路径处理
+if getattr(sys, 'frozen', False):
+    # 打包后的可执行文件
+    BASE_DIR = os.path.dirname(sys.executable)  # 可执行文件所在目录
+    TEMP_DIR = sys._MEIPASS  # PyInstaller临时解压目录
+else:
+    # 开发环境
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    TEMP_DIR = BASE_DIR
+
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -27,10 +36,11 @@ from src.core.study_record import (
 )
 
 
+# Flask应用初始化：打包后从临时目录加载模板和静态文件
 app = Flask(
     __name__,
-    template_folder=os.path.join(BASE_DIR, "templates"),
-    static_folder=os.path.join(BASE_DIR, "static"),
+    template_folder=os.path.join(TEMP_DIR, "templates"),
+    static_folder=os.path.join(TEMP_DIR, "static"),
     static_url_path="/static",
 )
 
@@ -39,6 +49,7 @@ app.config["JSON_AS_ASCII"] = False
 
 
 def get_sqlite_connection() -> sqlite3.Connection:
+    # 数据库文件放在可执行文件所在目录，方便用户数据持久化
     db_path = os.path.join(BASE_DIR, "japanese_learning.db")
     return sqlite3.connect(db_path)
 
@@ -359,7 +370,18 @@ def handle_500(e):
 if __name__ == "__main__":
     # 启动：python web_app.py
     port = int(os.environ.get("PORT", "5000"))
+    # 判断是否为打包后的可执行文件
+    is_frozen = getattr(sys, 'frozen', False)
+    # 打包后不使用debug模式，开发环境使用debug模式
+    debug_mode = not is_frozen
     # 为避免用户复制 0.0.0.0 导致无法直接在浏览器访问，改为本机 127.0.0.1
-    app.run(host="127.0.0.1", port=port, debug=True)
+    if is_frozen:
+        print("="*60)
+        print("日语学习系统 - 正在启动...")
+        print("="*60)
+        print(f"服务器地址: http://127.0.0.1:{port}")
+        print("按Ctrl+C退出程序")
+        print("="*60 + "\n")
+    app.run(host="127.0.0.1", port=port, debug=debug_mode)
 
 
